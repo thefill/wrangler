@@ -8,15 +8,15 @@ use crate::terminal::message::{Message, StdOut};
 
 use super::ScriptFormat;
 
-const OUTPUT_DIR: &str = "dist";
+const BUILD_DIR: &str = "dist";
 const SRC_DIR: &str = "src";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Builder {
     pub build_command: Option<String>,
-    #[serde(default = "output_dir")]
-    pub output_dir: PathBuf,
+    #[serde(default = "build_dir")]
+    pub build_dir: PathBuf,
     pub upload_format: ScriptFormat,
     #[serde(default = "src_dir")]
     pub src_dir: PathBuf,
@@ -29,10 +29,10 @@ fn default_warning(field: &str, default: &str) {
     ));
 }
 
-fn output_dir() -> PathBuf {
-    default_warning("output dir", OUTPUT_DIR);
+fn build_dir() -> PathBuf {
+    default_warning("build dir", BUILD_DIR);
     let current_dir = env::current_dir().unwrap();
-    current_dir.join(OUTPUT_DIR)
+    current_dir.join(BUILD_DIR)
 }
 
 fn src_dir() -> PathBuf {
