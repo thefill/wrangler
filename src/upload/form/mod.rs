@@ -1,3 +1,4 @@
+mod modules_worker;
 mod plain_text;
 mod project_assets;
 mod service_worker;
@@ -9,18 +10,22 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use ignore::WalkBuilder;
+
 use crate::settings::binding;
-use crate::settings::toml::{Target, TargetType};
+use crate::settings::toml::{ScriptFormat, Target, TargetType};
 use crate::sites::AssetManifest;
 use crate::wranglerjs;
 
 use plain_text::PlainText;
-use project_assets::ServiceWorkerAssets;
+use project_assets::{ModulesAssets, ServiceWorkerAssets};
 use text_blob::TextBlob;
 use wasm_module::WasmModule;
 
 // TODO: https://github.com/cloudflare/wrangler/issues/1083
 use super::{krate, Package};
+
+use self::project_assets::Module;
 
 pub fn build(
     target: &Target,
@@ -70,23 +75,73 @@ pub fn build(
 
             service_worker::build_form(&assets, session_config)
         }
-        TargetType::JavaScript => {
-            log::info!("JavaScript project detected. Publishing...");
-            let package_dir = target.package_dir()?;
-            let package = Package::new(&package_dir)?;
+        TargetType::JavaScript => match &target.builder_config {
+            Some(config) => match &config.upload_format {
+                ScriptFormat::ServiceWorker => {
+                    log::info!("Plain JavaScript project detected. Publishing...");
+                    let package_dir = target.package_dir()?;
+                    let package = Package::new(&package_dir)?;
+                    let script_path = package.main(&package_dir)?;
 
-            let script_path = package.main(&package_dir)?;
+                    let assets = ServiceWorkerAssets::new(
+                        script_path,
+                        wasm_modules,
+                        kv_namespaces.to_vec(),
+                        text_blobs,
+                        plain_texts,
+                    )?;
 
-            let assets = ServiceWorkerAssets::new(
-                script_path,
-                wasm_modules,
-                kv_namespaces.to_vec(),
-                text_blobs,
-                plain_texts,
-            )?;
+                    service_worker::build_form(&assets, session_config)
+                }
+                ScriptFormat::Modules => {
+                    let package_dir = target.package_dir()?;
+                    let package = Package::new(&package_dir)?;
+                    let main_module = package.module(&package_dir)?;
+                    let main_module_name = filename_from_path(&main_module)
+                        .ok_or_else(|| failure::err_msg("filename required for main module"))?;
 
-            service_worker::build_form(&assets, session_config)
-        }
+                    let modules_iter = WalkBuilder::new(config.build_dir.clone())
+                        .standard_filters(false)
+                        .build();
+
+                    let mut modules: Vec<Module> = vec![];
+
+                    for entry in modules_iter {
+                        let entry = entry?;
+                        let path = entry.path();
+                        if path.is_file() {
+                            modules.push(Module::new(path.to_owned())?);
+                        }
+                    }
+
+                    let assets = ModulesAssets::new(
+                        main_module_name,
+                        modules,
+                        kv_namespaces.to_vec(),
+                        plain_texts,
+                    )?;
+
+                    modules_worker::build_form(&assets, session_config)
+                }
+            },
+            None => {
+                log::info!("Plain JavaScript project detected. Publishing...");
+                let package_dir = target.package_dir()?;
+                let package = Package::new(&package_dir)?;
+
+                let script_path = package.main(&package_dir)?;
+
+                let assets = ServiceWorkerAssets::new(
+                    script_path,
+                    wasm_modules,
+                    kv_namespaces.to_vec(),
+                    text_blobs,
+                    plain_texts,
+                )?;
+
+                service_worker::build_form(&assets, session_config)
+            }
+        },
         TargetType::Webpack => {
             log::info!("webpack project detected. Publishing...");
             // TODO: https://github.com/cloudflare/wrangler/issues/850
@@ -128,8 +183,13 @@ fn get_asset_manifest_blob(asset_manifest: AssetManifest) -> Result<String, fail
     Ok(asset_manifest)
 }
 
-fn filename_from_path(path: &PathBuf) -> Option<String> {
+fn filestem_from_path(path: &PathBuf) -> Option<String> {
     path.file_stem()?.to_str().map(|s| s.to_string())
+}
+
+fn filename_from_path(path: &PathBuf) -> Option<String> {
+    path.file_name()
+        .map(|filename| filename.to_string_lossy().into_owned())
 }
 
 fn build_generated_dir() -> Result<(), failure::Error> {
