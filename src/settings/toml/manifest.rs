@@ -13,6 +13,7 @@ use crate::commands::{validate_worker_name, DEFAULT_CONFIG_PATH};
 use crate::deploy::{self, DeployTarget, DeploymentSet};
 use crate::settings::toml::builder::Builder;
 use crate::settings::toml::dev::Dev;
+use crate::settings::toml::durable_objects::DurableObjects;
 use crate::settings::toml::environment::Environment;
 use crate::settings::toml::kv_namespace::{ConfigKvNamespace, KvNamespace};
 use crate::settings::toml::route::RouteConfig;
@@ -54,6 +55,7 @@ pub struct Manifest {
     pub vars: Option<HashMap<String, String>>,
     pub text_blobs: Option<HashMap<String, PathBuf>>,
     pub triggers: Option<Triggers>,
+    pub durable_objects: Option<DurableObjects>,
 }
 
 impl Manifest {
@@ -243,6 +245,57 @@ impl Manifest {
                 deploy::ScheduleTarget::build(account.clone(), script.clone(), crons.to_vec())?;
             deployments.push(DeployTarget::Schedule(scheduled));
         }
+
+        match env {
+            Some(e) => {
+                let account_id = e.account_id.as_ref().unwrap_or(&self.account_id);
+                let namespaces: Vec<DeployTarget> = e
+                    .durable_objects
+                    .as_ref()
+                    .or_else(|| self.durable_objects.as_ref())
+                    .and_then(|config| config.implements.as_ref())
+                    .iter()
+                    .flat_map(|implements| {
+                        implements.iter().map(|ns| {
+                            DeployTarget::DurableObjectNamespace(
+                                deploy::DurableObjectNSTarget::new(
+                                    account_id.clone(),
+                                    script.clone(),
+                                    ns.class_name.clone(),
+                                ),
+                            )
+                        })
+                    })
+                    .collect();
+
+                for ns in namespaces.into_iter() {
+                    deployments.push(ns);
+                }
+            }
+            None => {
+                let namespaces: Vec<DeployTarget> = self
+                    .durable_objects
+                    .as_ref()
+                    .and_then(|config| config.implements.as_ref())
+                    .iter()
+                    .flat_map(|implements| {
+                        implements.iter().map(|ns| {
+                            DeployTarget::DurableObjectNamespace(
+                                deploy::DurableObjectNSTarget::new(
+                                    self.account_id.clone(),
+                                    script.clone(),
+                                    ns.class_name.clone(),
+                                ),
+                            )
+                        })
+                    })
+                    .collect();
+
+                for ns in namespaces.into_iter() {
+                    deployments.push(ns);
+                }
+            }
+        };
 
         if deployments.is_empty() {
             failure::bail!("No deployments specified!")

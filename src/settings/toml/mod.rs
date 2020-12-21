@@ -1,5 +1,6 @@
 mod builder;
 mod dev;
+mod durable_objects;
 mod environment;
 mod kv_namespace;
 mod manifest;

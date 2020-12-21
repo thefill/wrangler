@@ -1,7 +1,9 @@
+mod durable_objects;
 mod schedule;
 mod zoned;
 mod zoneless;
 
+pub use durable_objects::DurableObjectNSTarget;
 pub use schedule::ScheduleTarget;
 pub use zoned::ZonedTarget;
 pub use zoneless::ZonelessTarget;
@@ -16,6 +18,7 @@ pub enum DeployTarget {
     Zoned(ZonedTarget),
     Zoneless(ZonelessTarget),
     Schedule(ScheduleTarget),
+    DurableObjectNamespace(DurableObjectNSTarget),
 }
 
 pub fn worker(
@@ -37,6 +40,10 @@ pub fn worker(
                 let schedules = schedule.deploy(user)?;
                 results.schedules.extend(schedules);
             }
+            DeployTarget::DurableObjectNamespace(namespace) => {
+                let namespace = namespace.deploy(user)?;
+                results.durable_object_namespaces.push(namespace);
+            }
         }
     }
 
@@ -47,4 +54,5 @@ pub fn worker(
 pub struct DeployResults {
     pub urls: Vec<String>,
     pub schedules: Vec<String>,
+    pub durable_object_namespaces: Vec<String>,
 }
