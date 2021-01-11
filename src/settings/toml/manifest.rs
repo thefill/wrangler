@@ -291,7 +291,7 @@ impl Manifest {
                     })
                     .collect();
 
-                for ns in namespaces.into_iter() {
+                for ns in namespaces {
                     deployments.push(ns);
                 }
             }
@@ -351,8 +351,8 @@ impl Manifest {
             // to include the name of the environment
             name: self.name.clone(), // Inherited
             kv_namespaces: get_namespaces(self.kv_namespaces.clone(), preview)?, // Not inherited
-            site: self.site.clone(), // Inherited
-            vars: self.vars.clone(), // Not inherited
+            site: self.site.clone(),             // Inherited
+            vars: self.vars.clone(),             // Not inherited
             text_blobs: self.text_blobs.clone(), // Inherited
         };
 
