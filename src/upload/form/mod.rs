@@ -34,6 +34,7 @@ pub fn build(
 ) -> Result<Form, failure::Error> {
     let target_type = &target.target_type;
     let kv_namespaces = &target.kv_namespaces;
+    let used_durable_object_namespaces = &target.used_durable_object_namespaces;
     let mut text_blobs: Vec<TextBlob> = Vec::new();
     let mut plain_texts: Vec<PlainText> = Vec::new();
     let mut wasm_modules: Vec<WasmModule> = Vec::new();
@@ -69,6 +70,7 @@ pub fn build(
                 script_path,
                 wasm_modules,
                 kv_namespaces.to_vec(),
+                used_durable_object_namespaces.to_vec(),
                 text_blobs,
                 plain_texts,
             )?;
@@ -87,6 +89,7 @@ pub fn build(
                         script_path,
                         wasm_modules,
                         kv_namespaces.to_vec(),
+                        used_durable_object_namespaces.to_vec(),
                         text_blobs,
                         plain_texts,
                     )?;
@@ -118,6 +121,7 @@ pub fn build(
                         main_module_name,
                         modules,
                         kv_namespaces.to_vec(),
+                        used_durable_object_namespaces.to_vec(),
                         plain_texts,
                     )?;
 
@@ -135,6 +139,7 @@ pub fn build(
                     script_path,
                     wasm_modules,
                     kv_namespaces.to_vec(),
+                    used_durable_object_namespaces.to_vec(),
                     text_blobs,
                     plain_texts,
                 )?;
@@ -169,6 +174,7 @@ pub fn build(
                 script_path,
                 wasm_modules,
                 kv_namespaces.to_vec(),
+                used_durable_object_namespaces.to_vec(),
                 text_blobs,
                 plain_texts,
             )?;

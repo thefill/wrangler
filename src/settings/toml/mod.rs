@@ -12,6 +12,7 @@ mod target_type;
 mod triggers;
 
 pub use builder::Builder;
+pub use durable_objects::{DurableObjectNamespace, DurableObjectNamespaceImpl, DurableObjects};
 pub use environment::Environment;
 pub use kv_namespace::{ConfigKvNamespace, KvNamespace};
 pub use manifest::Manifest;

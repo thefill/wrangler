@@ -32,7 +32,7 @@ pub fn publish(
 ) -> Result<(), failure::Error> {
     validate_target_required_fields_present(target)?;
 
-    let deploy = |target: &Target| match deploy::worker(&user, &deployments) {
+    let deploy = |target: &Target| match deploy::deploy(&user, &deployments) {
         Ok(deploy::DeployResults {
             urls,
             schedules,
@@ -150,6 +150,7 @@ pub fn publish(
     } else {
         let upload_client = http::legacy_auth_client(user);
 
+        deploy::pre_upload(user, target, &deployments)?;
         upload::script(&upload_client, &target, None)?;
         deploy(target)?;
     }
