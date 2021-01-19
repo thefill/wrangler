@@ -3,10 +3,10 @@ use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
 pub use watcher::wait_for_changes;
 
-use crate::build::command;
 use crate::settings::toml::{Target, TargetType};
 use crate::terminal::message::{Message, StdOut};
 use crate::wranglerjs;
+use crate::{build::command, build_target};
 use crate::{commands, install};
 
 use notify::{self, RecursiveMode, Watcher};
@@ -28,27 +28,56 @@ pub fn watch_and_build(
     tx: Option<mpsc::Sender<()>>,
 ) -> Result<(), failure::Error> {
     let target_type = &target.target_type;
+    let builder_config = target.builder_config.clone();
     match target_type {
         TargetType::JavaScript => {
-            thread::spawn(move || {
+            let target = target.clone();
+            thread::spawn::<_, Result<(), failure::Error>>(move || {
                 let (watcher_tx, watcher_rx) = mpsc::channel();
-                let mut watcher = notify::watcher(watcher_tx, Duration::from_secs(1)).unwrap();
+                let mut watcher = notify::watcher(watcher_tx, Duration::from_secs(1))?;
 
-                watcher
-                    .watch(JAVASCRIPT_PATH, RecursiveMode::Recursive)
-                    .unwrap();
-                StdOut::info(&format!("watching {:?}", &JAVASCRIPT_PATH));
+                match builder_config {
+                    None => {
+                        watcher.watch(JAVASCRIPT_PATH, RecursiveMode::Recursive)?;
+                        StdOut::info(&format!("watching {:?}", &JAVASCRIPT_PATH));
 
-                loop {
-                    match wait_for_changes(&watcher_rx, COOLDOWN_PERIOD) {
-                        Ok(_path) => {
-                            if let Some(tx) = tx.clone() {
-                                tx.send(()).expect("--watch change message failed to send");
+                        loop {
+                            match wait_for_changes(&watcher_rx, COOLDOWN_PERIOD) {
+                                Ok(_path) => {
+                                    if let Some(tx) = tx.clone() {
+                                        tx.send(()).expect("--watch change message failed to send");
+                                    }
+                                }
+                                Err(e) => {
+                                    log::debug!("{:?}", e);
+                                    StdOut::user_error("Something went wrong while watching.")
+                                }
                             }
                         }
-                        Err(e) => {
-                            log::debug!("{:?}", e);
-                            StdOut::user_error("Something went wrong while watching.")
+                    }
+                    Some(config) => {
+                        watcher
+                            .watch(config.src_dir, notify::RecursiveMode::Recursive)
+                            .unwrap();
+
+                        let mut is_first = true;
+
+                        loop {
+                            match watcher_rx.recv() {
+                                Ok(_) => {
+                                    if is_first {
+                                        is_first = false;
+                                        StdOut::info("Ignoring stale first change");
+                                        continue;
+                                    } else {
+                                        let output = build_target(&target).unwrap();
+                                        StdOut::success(&format!("{}\nUploading...", output));
+                                    }
+                                }
+                                Err(_) => {
+                                    StdOut::user_error("Something went wrong while watching.")
+                                }
+                            }
                         }
                     }
                 }

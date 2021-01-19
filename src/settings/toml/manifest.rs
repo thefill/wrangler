@@ -11,6 +11,7 @@ use serde_with::rust::string_empty_as_none;
 
 use crate::commands::{validate_worker_name, DEFAULT_CONFIG_PATH};
 use crate::deploy::{self, DeployTarget, DeploymentSet};
+use crate::settings::toml::builder::Builder;
 use crate::settings::toml::dev::Dev;
 use crate::settings::toml::environment::Environment;
 use crate::settings::toml::kv_namespace::{ConfigKvNamespace, KvNamespace};
@@ -40,6 +41,8 @@ pub struct Manifest {
     #[serde(default, with = "string_empty_as_none")]
     pub zone_id: Option<String>,
     pub webpack_config: Option<String>,
+    #[serde(alias = "builder-config")]
+    pub builder_config: Option<Builder>,
     pub private: Option<bool>,
     // TODO: maybe one day, serde toml support will allow us to serialize sites
     // as a TOML inline table (this would prevent confusion with environments too!)
@@ -290,6 +293,7 @@ impl Manifest {
             target_type,                                 // Top level
             account_id: self.account_id.clone(),         // Inherited
             webpack_config: self.webpack_config.clone(), // Inherited
+            builder_config: self.builder_config.clone(), // Inherited
             // importantly, the top level name will be modified
             // to include the name of the environment
             name: self.name.clone(), // Inherited
@@ -308,6 +312,9 @@ impl Manifest {
             }
             if let Some(webpack_config) = &environment.webpack_config {
                 target.webpack_config = Some(webpack_config.clone());
+            }
+            if let Some(builder_config) = &environment.builder_config {
+                target.builder_config = Some(builder_config.clone());
             }
 
             // don't inherit kv namespaces because it is an anti-pattern to use the same namespaces across multiple environments
